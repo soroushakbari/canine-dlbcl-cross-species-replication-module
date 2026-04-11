@@ -1,0 +1,11 @@
+dataset_id	species	data_type	main_role
+GSE56315	Human	Microarray tumour vs normal	Human discovery / module derivation
+GSE30881	Dog	Microarray tumour vs normal	Canine discovery / cross-species module derivation
+GSE130874	Dog	RNA-seq pretreatment DLBCL	Canine validation / PARP1-TOP2A / PFS
+GSE31312	Human	Microarray DLBCL cohort	Human OS validation
+TCGA-DLBC	Human	RNA-seq DLBCL cohort	Exploratory OS validation
+GSE171272	Human	EV-miRNA profiling	EV-miRNA analysis
+STRING	Human	PPI database	PPI network construction
+CMap/LINCS	Human	Drug perturbation resource	Drug prioritisation
+Reactome	Human	Pathway database	Pathway enrichment
+KEGG	Human	Pathway database	Pathway enrichment

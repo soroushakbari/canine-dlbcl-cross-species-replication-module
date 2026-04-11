@@ -1,0 +1,4 @@
+cohort	species	outcome	n	n_events	HR	lower95	upper95	p_value
+TCGA-DLBC	Human	OS	47	9	0.584	0.26	1.312	0.193
+GSE130874	Dog	PFS	23	21	0.49	0.26	0.94	0.0318
+GSE31312	Human	OS	470	170	0.54	0.32	0.9	0.0189
