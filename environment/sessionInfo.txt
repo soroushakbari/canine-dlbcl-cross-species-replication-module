@@ -1,0 +1,69 @@
+R version 4.5.2 (2025-10-31 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 10 x64 (build 19045)
+
+Matrix products: default
+  LAPACK version 3.12.1
+
+locale:
+[1] LC_COLLATE=English_United States.utf8  LC_CTYPE=English_United States.utf8   
+[3] LC_MONETARY=English_United States.utf8 LC_NUMERIC=C                          
+[5] LC_TIME=English_United States.utf8    
+
+time zone: Asia/Tehran
+tzcode source: internal
+
+attached base packages:
+[1] tools     stats     graphics  grDevices utils     datasets  methods  
+[8] base     
+
+other attached packages:
+[1] tibble_3.3.0  purrr_1.2.0   readr_2.1.6   dplyr_1.1.4   stringr_1.6.0
+
+loaded via a namespace (and not attached):
+ [1] tidyselect_1.2.1            farver_2.1.2               
+ [3] blob_1.2.4                  filelock_1.0.3             
+ [5] Biostrings_2.76.0           S7_0.2.1                   
+ [7] bitops_1.0-9                fastmap_1.2.0              
+ [9] BiocFileCache_2.16.2        digest_0.6.39              
+[11] lifecycle_1.0.5             KEGGREST_1.48.1            
+[13] RSQLite_2.4.5               magrittr_2.0.4             
+[15] compiler_4.5.2              rlang_1.1.6                
+[17] progress_1.2.3              igraph_2.2.1               
+[19] plotrix_3.8-13              prettyunits_1.2.0          
+[21] S4Arrays_1.8.1              curl_7.0.0                 
+[23] bit_4.6.0                   DelayedArray_0.34.1        
+[25] xml2_1.5.1                  plyr_1.8.9                 
+[27] RColorBrewer_1.1-3          abind_1.4-8                
+[29] BiocParallel_1.42.2         KernSmooth_2.23-26         
+[31] withr_3.0.2                 BiocGenerics_0.54.1        
+[33] grid_4.5.2                  hash_2.2.6.3               
+[35] stats4_4.5.2                STRINGdb_2.20.0            
+[37] caTools_1.18.3              ggplot2_4.0.1              
+[39] scales_1.4.0                gtools_3.9.5               
+[41] biomaRt_2.64.0              SummarizedExperiment_1.38.1
+[43] cli_3.6.5                   crayon_1.5.3               
+[45] chron_2.3-62                generics_0.1.4             
+[47] otel_0.2.0                  rstudioapi_0.17.1          
+[49] tzdb_0.5.0                  httr_1.4.7                 
+[51] DBI_1.2.3                   cachem_1.1.0               
+[53] parallel_4.5.2              AnnotationDbi_1.70.0       
+[55] XVector_0.48.0              matrixStats_1.5.0          
+[57] vctrs_0.6.5                 Matrix_1.7-4               
+[59] jsonlite_2.0.0              IRanges_2.42.0             
+[61] hms_1.1.4                   S4Vectors_0.46.0           
+[63] bit64_4.6.0-1               locfit_1.5-9.12            
+[65] tidyr_1.3.2                 proto_1.0.0                
+[67] glue_1.8.0                  codetools_0.2-20           
+[69] stringi_1.8.7               gtable_0.3.6               
+[71] GenomeInfoDb_1.44.3         GenomicRanges_1.60.0       
+[73] UCSC.utils_1.4.0            pillar_1.11.1              
+[75] rappdirs_0.3.3              gplots_3.3.0               
+[77] GenomeInfoDbData_1.2.14     dbplyr_2.5.1               
+[79] R6_2.6.1                    httr2_1.2.2                
+[81] lattice_0.22-7              Biobase_2.68.0             
+[83] gsubfn_0.7                  png_0.1-8                  
+[85] memoise_2.0.1               Rcpp_1.1.0                 
+[87] SparseArray_1.8.1           sqldf_0.4-11               
+[89] DESeq2_1.48.2               MatrixGenerics_1.20.0      
+[91] pkgconfig_2.0.3            
