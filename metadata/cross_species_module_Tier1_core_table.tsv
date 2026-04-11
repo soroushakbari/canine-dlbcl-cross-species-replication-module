@@ -1,0 +1,3 @@
+human_symbol	dog_symbol	direction	orthology_type	human_logFC	human_adj.P	human_is_sig	human_dir	dog_logFC	dog_adj.P	dog_is_sig	dog_dir
+ANGPTL1	ANGPTL1	down	ortholog_one2one	-3.822630994751521	1.4082769684245642e-53	TRUE	down	-1.361217326086957	1.6298640429011217e-5	TRUE	down
+HGFAC	HGFAC	down	ortholog_one2one	-2.8470459609515184	2.620400491702818e-72	TRUE	down	-1.2351999130434774	7.231465176690462e-5	TRUE	down
