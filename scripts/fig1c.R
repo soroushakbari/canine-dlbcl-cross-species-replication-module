@@ -1,16 +1,13 @@
-## 31_phase8_figures_crossSpecies_logFC_scatter.R
-## هدف:
-##  - Fig. 3C: cross-species log2FC scatter (human vs canine) برای ماژول BROAD
-##  - نمایش:
-##      * STRICT core vs BROAD-only (Module membership)
-##      * Hub / Bottleneck / Hub–bottleneck / Other (Network class)
-##      * برچسب تمیز TOP2A و PARP1 با ggrepel
 
-message("=== Phase 8 (Figures): Cross-species logFC scatter (Fig. 3C) ===")
+## fig1c.R
+## Cross-species log2FC scatter for the BROAD module
+## Final revised version for manuscript / reviewer response
+
+message("=== Phase 8 (Figures): Cross-species logFC scatter ===")
 
 required_pkgs <- c(
   "readr", "dplyr", "tibble", "stringr",
-  "ggplot2", "forcats", "ggrepel", "tidyr"
+  "ggplot2", "ggrepel", "tidyr"
 )
 
 for (pkg in required_pkgs) {
@@ -19,7 +16,7 @@ for (pkg in required_pkgs) {
       "Package '", pkg, "' is required but not installed.\n",
       "Please run: install.packages(c(",
       paste(sprintf('\"%s\"', required_pkgs), collapse = ", "),
-      ")) و دوباره اسکریپت را اجرا کن."
+      "))"
     )
   }
 }
@@ -30,7 +27,6 @@ suppressPackageStartupMessages({
   library(tibble)
   library(stringr)
   library(ggplot2)
-  library(forcats)
   library(ggrepel)
   library(tidyr)
 })
@@ -40,12 +36,12 @@ suppressPackageStartupMessages({
 ## --------------------------------------------------------------------
 ## 1. paths
 ## --------------------------------------------------------------------
-## به‌صورت صریح روت پروژه DLBCL رو ست می‌کنیم
-project_root <- normalizePath("D:/Research/My Articles/DLBCL drug",
-                              winslash = "/",
-                              mustWork = TRUE)
+project_root <- normalizePath(
+  "D:/Research/My Articles/DLBCL drug",
+  winslash = "/",
+  mustWork = TRUE
+)
 message("Project root: ", project_root)
-
 
 sig_dir <- file.path(project_root, "results", "tables", "signatures")
 net_dir <- file.path(project_root, "results", "tables", "network")
@@ -65,29 +61,39 @@ path_broad  <- file.path(sig_dir, "cross_species_module_BROAD_table.tsv")
 path_strict <- file.path(sig_dir, "cross_species_module_STRICT_core_table.tsv")
 path_nodes  <- file.path(net_dir,  "PPI_cross_species_BROAD_nodes.tsv")
 
-if (!file.exists(path_broad)) {
-  stop("BROAD cross-species table not found at:\n  ", path_broad)
-}
-if (!file.exists(path_strict)) {
-  stop("STRICT core cross-species table not found at:\n  ", path_strict)
-}
-if (!file.exists(path_nodes)) {
-  stop("PPI nodes table not found at:\n  ", path_nodes)
+for (p in c(path_broad, path_strict, path_nodes)) {
+  if (!file.exists(p)) {
+    stop("Required file not found:\n  ", p)
+  }
 }
 
 ## --------------------------------------------------------------------
 ## 2. helpers
 ## --------------------------------------------------------------------
-get_col <- function(df, candidates, label) {
+get_col <- function(df, candidates, label, required = TRUE) {
   present <- candidates[candidates %in% names(df)]
   if (length(present) == 0) {
-    stop(
-      "Could not find any of ",
-      paste(candidates, collapse = ", "),
-      " in ", label, "."
-    )
+    if (required) {
+      stop(
+        "Could not find any of ",
+        paste(candidates, collapse = ", "),
+        " in ", label, "."
+      )
+    } else {
+      return(NA_character_)
+    }
   }
   present[1]
+}
+
+normalize_hub_type <- function(x) {
+  x <- as.character(x)
+  dplyr::case_when(
+    x %in% c("hub_bottleneck", "hub-bottleneck", "hub bottleneck") ~ "hub_bottleneck",
+    x %in% c("bottleneck") ~ "bottleneck",
+    x %in% c("hub") ~ "hub",
+    TRUE ~ "non_hub"
+  )
 }
 
 ## --------------------------------------------------------------------
@@ -98,12 +104,12 @@ message("Reading cross-species BROAD & STRICT tables ...")
 broad  <- readr::read_tsv(path_broad,  show_col_types = FALSE)
 strict <- readr::read_tsv(path_strict, show_col_types = FALSE)
 
-human_col  <- get_col(
+human_col <- get_col(
   broad,
   c("human_symbol", "human_gene", "Human_symbol", "human"),
   "BROAD cross-species table"
 )
-dog_col    <- get_col(
+dog_col <- get_col(
   broad,
   c("dog_symbol", "dog_gene", "Dog_symbol", "dog"),
   "BROAD cross-species table"
@@ -119,40 +125,40 @@ dlogFC_col <- get_col(
   "BROAD cross-species table"
 )
 
-hFDR_col <- intersect(
-  c("human_FDR", "human_adjP", "human_FDR_tumor_vs_normal"),
-  names(broad)
+hFDR_col <- get_col(
+  broad,
+  c("human_FDR", "human_adjP", "human_FDR_tumor_vs_normal", "human_adj.P.Val"),
+  "BROAD cross-species table",
+  required = FALSE
 )
-dFDR_col <- intersect(
-  c("dog_FDR", "dog_adjP", "dog_FDR_tumor_vs_normal"),
-  names(broad)
+dFDR_col <- get_col(
+  broad,
+  c("dog_FDR", "dog_adjP", "dog_FDR_tumor_vs_normal", "dog_adj.P.Val"),
+  "BROAD cross-species table",
+  required = FALSE
 )
 
 broad2 <- broad %>%
   mutate(
-    human_symbol = .data[[human_col]],
-    dog_symbol   = .data[[dog_col]],
+    human_symbol = as.character(.data[[human_col]]),
+    dog_symbol   = as.character(.data[[dog_col]]),
     human_logFC  = as.numeric(.data[[hlogFC_col]]),
     dog_logFC    = as.numeric(.data[[dlogFC_col]])
   ) %>%
-  select(
-    human_symbol, dog_symbol,
-    human_logFC, dog_logFC,
-    everything()
-  )
+  select(human_symbol, dog_symbol, human_logFC, dog_logFC, everything())
 
 strict2 <- strict %>%
   mutate(
-    human_symbol = .data[[get_col(
+    human_symbol = as.character(.data[[get_col(
       strict,
       c("human_symbol", "human_gene", "Human_symbol", "human"),
       "STRICT cross-species table"
-    )]],
-    dog_symbol   = .data[[get_col(
+    )]]),
+    dog_symbol = as.character(.data[[get_col(
       strict,
       c("dog_symbol", "dog_gene", "Dog_symbol", "dog"),
       "STRICT cross-species table"
-    )]]
+    )]])
   ) %>%
   select(human_symbol, dog_symbol, everything())
 
@@ -163,38 +169,51 @@ strict_pairs <- strict2 %>%
 
 plot_df <- broad2 %>%
   mutate(
-    pair_id    = paste0(human_symbol, "|", dog_symbol),
-    membership = if_else(pair_id %in% strict_pairs,
-                         "STRICT core",
-                         "BROAD-only")
+    pair_id = paste0(human_symbol, "|", dog_symbol),
+    membership = if_else(pair_id %in% strict_pairs, "STRICT core", "BROAD-only")
   )
 
 ## --------------------------------------------------------------------
-## 4. join PPI nodes (hub_type)
+## 4. join PPI nodes
 ## --------------------------------------------------------------------
+message("Reading PPI node table ...")
 nodes <- readr::read_tsv(path_nodes, show_col_types = FALSE)
 
-if (!"gene" %in% names(nodes)) {
-  stop("PPI nodes table lacks 'gene' column.")
-}
-if (!"hub_type" %in% names(nodes)) {
-  nodes$hub_type <- "non_hub"
-}
+gene_col_nodes <- get_col(
+  nodes,
+  c("gene", "human_symbol", "symbol"),
+  "PPI node table"
+)
+
+hub_col <- get_col(
+  nodes,
+  c("hub_type", "node_class", "class"),
+  "PPI node table",
+  required = FALSE
+)
+
+deg_col <- get_col(
+  nodes,
+  c("degree", "degree_centrality", "deg"),
+  "PPI node table",
+  required = FALSE
+)
+
+btw_col <- get_col(
+  nodes,
+  c("betweenness", "betweenness_centrality", "btw"),
+  "PPI node table",
+  required = FALSE
+)
 
 nodes2 <- nodes %>%
   mutate(
-    hub_type = case_when(
-      hub_type %in% c("hub_bottleneck", "hub-bottleneck") ~ "hub_bottleneck",
-      hub_type %in% c("bottleneck")                       ~ "bottleneck",
-      hub_type %in% c("hub")                              ~ "hub",
-      TRUE                                                ~ "non_hub"
-    ),
-    hub_type = factor(
-      hub_type,
-      levels = c("non_hub", "hub", "bottleneck", "hub_bottleneck")
-    )
+    gene = as.character(.data[[gene_col_nodes]]),
+    hub_type = if (!is.na(hub_col)) normalize_hub_type(.data[[hub_col]]) else "non_hub",
+    degree_use = if (!is.na(deg_col)) as.numeric(.data[[deg_col]]) else NA_real_,
+    betweenness_use = if (!is.na(btw_col)) as.numeric(.data[[btw_col]]) else NA_real_
   ) %>%
-  select(gene, hub_type)
+  select(gene, hub_type, degree_use, betweenness_use)
 
 plot_df <- plot_df %>%
   left_join(nodes2, by = c("human_symbol" = "gene")) %>%
@@ -210,8 +229,7 @@ plot_df <- plot_df %>%
     )
   )
 
-# اگر FDRها باشند (اختیاری، فعلاً در plot استفاده نمی‌کنیم)
-if (length(hFDR_col) == 1 && length(dFDR_col) == 1) {
+if (!is.na(hFDR_col) && !is.na(dFDR_col)) {
   plot_df <- plot_df %>%
     mutate(
       human_FDR = as.numeric(.data[[hFDR_col]]),
@@ -222,19 +240,100 @@ if (length(hFDR_col) == 1 && length(dFDR_col) == 1) {
   plot_df$mean_negLog10FDR <- NA_real_
 }
 
-# فیلتر جفت‌هایی که logFC ندارند
 plot_df <- plot_df %>%
-  filter(!is.na(human_logFC), !is.na(dog_logFC))
+  filter(!is.na(human_logFC), !is.na(dog_logFC)) %>%
+  mutate(
+    max_abs_logFC = pmax(abs(human_logFC), abs(dog_logFC), na.rm = TRUE),
+    hub_rank = case_when(
+      hub_type == "hub_bottleneck" ~ 1L,
+      hub_type == "hub"            ~ 2L,
+      hub_type == "bottleneck"     ~ 3L,
+      TRUE                         ~ 4L
+    )
+  )
 
 message("  - N ortholog pairs in BROAD module (with logFC): ", nrow(plot_df))
-message("  - STRICT core pairs: ",
-        sum(plot_df$membership == "STRICT core", na.rm = TRUE))
+message("  - STRICT core pairs: ", sum(plot_df$membership == "STRICT core", na.rm = TRUE))
 
 ## --------------------------------------------------------------------
-## 5. aesthetics
+## 5. choose labelled genes
+## --------------------------------------------------------------------
+## Fixed core story genes:
+priority_genes <- c("TOP2A", "PARP1")
+preferred_extra_genes <- c("AURKA", "BUB1B", "BRCA1")
+
+plot_df <- plot_df %>%
+  mutate(
+    degree_rank = if (all(is.na(degree_use))) {
+      NA_integer_
+    } else {
+      dplyr::dense_rank(dplyr::desc(tidyr::replace_na(degree_use, -Inf)))
+    },
+    betweenness_rank = if (all(is.na(betweenness_use))) {
+      NA_integer_
+    } else {
+      dplyr::dense_rank(dplyr::desc(tidyr::replace_na(betweenness_use, -Inf)))
+    }
+  ) %>%
+  mutate(
+    centrality_rank = case_when(
+      !is.na(degree_rank) & !is.na(betweenness_rank) ~ degree_rank + betweenness_rank,
+      !is.na(degree_rank) &  is.na(betweenness_rank) ~ degree_rank,
+      is.na(degree_rank)  & !is.na(betweenness_rank) ~ betweenness_rank,
+      TRUE ~ 9999L
+    )
+  )
+
+priority_df <- plot_df %>%
+  filter(human_symbol %in% priority_genes) %>%
+  distinct(human_symbol, .keep_all = TRUE)
+
+preferred_extra_df <- plot_df %>%
+  filter(human_symbol %in% preferred_extra_genes) %>%
+  distinct(human_symbol, .keep_all = TRUE)
+
+n_missing_extra <- 3 - nrow(preferred_extra_df)
+
+fallback_extra_df <- plot_df %>%
+  filter(hub_type %in% c("hub", "bottleneck", "hub_bottleneck")) %>%
+  filter(!human_symbol %in% c(priority_genes, preferred_extra_genes)) %>%
+  arrange(hub_rank, centrality_rank, desc(max_abs_logFC), human_symbol) %>%
+  distinct(human_symbol, .keep_all = TRUE) %>%
+  slice_head(n = max(0, n_missing_extra))
+
+label_df <- bind_rows(
+  priority_df,
+  preferred_extra_df,
+  fallback_extra_df
+) %>%
+  distinct(human_symbol, .keep_all = TRUE)
+
+## desired order in output
+label_df <- label_df %>%
+  mutate(
+    label_order = match(human_symbol, c(priority_genes, preferred_extra_genes))
+  ) %>%
+  arrange(label_order, centrality_rank, desc(max_abs_logFC), human_symbol) %>%
+  select(-label_order)
+
+message("Genes labelled in Fig. 1C:")
+cat("  ", paste(label_df$human_symbol, collapse = ", "), "\n")
+
+label_out <- file.path(fig_dir, "Fig1C_labelled_genes.tsv")
+label_df %>%
+  select(
+    human_symbol, dog_symbol, human_logFC, dog_logFC, membership,
+    hub_type, degree_use, betweenness_use, centrality_rank, max_abs_logFC
+  ) %>%
+  readr::write_tsv(label_out)
+message("Saved labelled-gene table to:")
+message("  ", label_out)
+
+## --------------------------------------------------------------------
+## 6. aesthetics
 ## --------------------------------------------------------------------
 range_all <- range(c(plot_df$human_logFC, plot_df$dog_logFC), na.rm = TRUE)
-pad       <- diff(range_all) * 0.08
+pad <- diff(range_all) * 0.08
 limits_xy <- c(range_all[1] - pad, range_all[2] + pad)
 
 col_membership <- c(
@@ -250,68 +349,92 @@ shape_hub <- c(
 )
 
 ## --------------------------------------------------------------------
-## 6. labels برای TOP2A و PARP1
+## 7. build scatter plot
 ## --------------------------------------------------------------------
-label_genes <- c("TOP2A", "PARP1")
-df_labels   <- plot_df %>%
-  filter(human_symbol %in% label_genes)
-
-if (nrow(df_labels) == 0) {
-  warning("No TOP2A / PARP1 rows found in plot_df – labels will be skipped.")
-}
-
-## --------------------------------------------------------------------
-## 7. build scatter plot (Fig. 3C)
-## --------------------------------------------------------------------
-p_scatter <- ggplot(
-  plot_df,
-  aes(x = human_logFC, y = dog_logFC)
-) +
-  # همه ژن‌ها
+p_scatter <- ggplot(plot_df, aes(x = human_logFC, y = dog_logFC)) +
   geom_point(
-    aes(
-      shape = hub_type,
-      fill  = membership
-    ),
+    aes(shape = hub_type, fill = membership),
     colour = "grey30",
-    size   = 2.3,
-    alpha  = 0.8,
+    size   = 2.15,
+    alpha  = 0.72,
     stroke = 0.25
   ) +
-  # خط y = x
+  geom_point(
+    data = label_df,
+    aes(
+      x = human_logFC,
+      y = dog_logFC,
+      shape = hub_type,
+      fill = membership
+    ),
+    colour = "black",
+    size   = 3.2,
+    alpha  = 1,
+    stroke = 0.55,
+    inherit.aes = FALSE
+  ) +
   geom_abline(
     slope     = 1,
     intercept = 0,
     linetype  = "dashed",
     colour    = "grey70",
-    size      = 0.4
+    linewidth = 0.4
   ) +
-  # لیبل تمیز برای TOP2A و PARP1
-  {
-    if (nrow(df_labels) > 0) {
-      geom_label_repel(
-        data  = df_labels,
-        aes(label = human_symbol),
-        size          = 3,
-        fontface      = "bold",
-        label.size    = 0.2,
-        label.padding = unit(0.15, "lines"),
-        nudge_x       = c(0.4, -0.4),
-        nudge_y       = c(-0.3, 0.3),
-        min.segment.length = 0,
-        segment.colour     = "grey40",
-        segment.size       = 0.3,
-        max.overlaps       = Inf
-      )
-    }
-  } +
+  ggrepel::geom_label_repel(
+    data = label_df,
+    aes(
+      x = human_logFC,
+      y = dog_logFC,
+      label = human_symbol
+    ),
+    inherit.aes        = FALSE,
+    size               = 3,
+    fontface           = "bold",
+    label.size         = 0.2,
+    label.padding      = grid::unit(0.15, "lines"),
+    min.segment.length = 0,
+    segment.colour     = "grey40",
+    segment.size       = 0.3,
+    max.overlaps       = Inf,
+    box.padding        = 0.25,
+    point.padding      = 0.2,
+    seed               = 12345
+  ) +
   scale_shape_manual(
     values = shape_hub,
-    name   = "Network class"
+    name   = "Network class",
+    labels = c(
+      non_hub = "Other",
+      hub = "Hub",
+      bottleneck = "Bottleneck",
+      hub_bottleneck = "Hub–bottleneck"
+    )
   ) +
   scale_fill_manual(
     values = col_membership,
     name   = "Module membership"
+  ) +
+  guides(
+    fill = guide_legend(
+      override.aes = list(
+        shape  = 21,
+        colour = "grey30",
+        size   = 4,
+        alpha  = 1,
+        stroke = 0.35
+      ),
+      order = 1
+    ),
+    shape = guide_legend(
+      override.aes = list(
+        fill   = "white",
+        colour = "grey30",
+        size   = 4,
+        alpha  = 1,
+        stroke = 0.6
+      ),
+      order = 2
+    )
   ) +
   coord_equal(xlim = limits_xy, ylim = limits_xy, expand = FALSE) +
   labs(
@@ -321,26 +444,25 @@ p_scatter <- ggplot(
   theme_bw() +
   theme(
     panel.grid.minor = element_blank(),
-    panel.grid.major = element_line(colour = "grey90", size = 0.3),
+    panel.grid.major = element_line(colour = "grey90", linewidth = 0.3),
     axis.title       = element_text(size = 11),
     axis.text        = element_text(size = 10),
     legend.title     = element_text(size = 10),
     legend.text      = element_text(size = 9),
-    legend.key.size  = unit(0.5, "lines"),
-    legend.box       = "vertical",
-    plot.title       = element_text(size = 12, face = "bold", hjust = 0.5)
+    legend.key.size  = grid::unit(0.5, "lines"),
+    legend.box       = "vertical"
   )
 
 ## --------------------------------------------------------------------
 ## 8. save
 ## --------------------------------------------------------------------
-fig_file_png <- file.path(fig_dir, "Fig3C_crossSpecies_logFC_scatter.png")
-fig_file_pdf <- file.path(fig_dir, "Fig3C_crossSpecies_logFC_scatter.pdf")
+fig_file_png <- file.path(fig_dir, "Fig1C_crossSpecies_logFC_scatter.png")
+fig_file_pdf <- file.path(fig_dir, "Fig1C_crossSpecies_logFC_scatter.pdf")
 
 ggsave(fig_file_png, p_scatter, width = 6.5, height = 5.5, units = "in", dpi = 300)
 ggsave(fig_file_pdf, p_scatter, width = 6.5, height = 5.5, units = "in")
 
-message("Saved Fig. 3C scatter to:")
+message("Saved cross-species logFC scatter to:")
 message("  - ", fig_file_png)
 message("  - ", fig_file_pdf)
 message("=== Phase 8 (Figures): Cross-species logFC scatter completed successfully. ===")
