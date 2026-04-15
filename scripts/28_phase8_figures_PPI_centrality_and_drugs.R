@@ -1,12 +1,18 @@
 ## 28_phase8_figures_PPI_centrality_and_drugs.R
 ## هدف:
-##  - Fig. 4A: PPI centrality landscape for cross-species BROAD module
-##  - Fig. 4B: CMap drug–target landscape with PPI mapping
+##  - Fig. 3A: PPI centrality landscape for cross-species BROAD module
+##  - Fig. 3C: CMap drug–target landscape with PPI mapping
+## نکات ریوایز:
+##  - all hub–bottlenecks are labelled in Fig. 3A
+##  - PARP1 is additionally labelled as a drug-anchored bottleneck
+##  - full list of hub–bottleneck and bottleneck genes is exported for Supplementary Table S1
 
-message("=== Phase 8 (Figures): PPI centrality + CMap drug landscape (Fig. 4A, 4B) ===")
+message("=== Phase 8 (Figures): PPI centrality + CMap drug landscape (Fig. 3A, 3C) ===")
 
-required_pkgs <- c("readr", "dplyr", "tibble", "stringr",
-                   "ggplot2", "forcats", "ggrepel")
+required_pkgs <- c(
+  "readr", "dplyr", "tibble", "stringr",
+  "ggplot2", "forcats", "ggrepel", "tidyr"
+)
 
 for (pkg in required_pkgs) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
@@ -14,7 +20,7 @@ for (pkg in required_pkgs) {
       "Package '", pkg, "' is required but not installed.\n",
       "Please run: install.packages(c(",
       paste(sprintf('\"%s\"', required_pkgs), collapse = ", "),
-      ")) و دوباره اسکریپت را اجرا کن."
+      ")) and rerun the script."
     )
   }
 }
@@ -27,16 +33,17 @@ suppressPackageStartupMessages({
   library(ggplot2)
   library(forcats)
   library(ggrepel)
+  library(tidyr)
 })
-
-`%||%` <- function(a, b) if (!is.null(a)) a else b
 
 ## --------------------------------------------------------------------
 ## 1. paths
 ## --------------------------------------------------------------------
-project_root <- normalizePath(file.path(".."),
-                              winslash = "/",
-                              mustWork = TRUE)
+project_root <- normalizePath(
+  "D:/Research/My Articles/DLBCL drug",
+  winslash = "/",
+  mustWork = TRUE
+)
 
 message("Project root: ", project_root)
 
@@ -55,18 +62,27 @@ nodes_path      <- file.path(net_dir,  "PPI_cross_species_BROAD_nodes.tsv")
 hubs_drug_path  <- file.path(net_dir,  "PPI_cross_species_BROAD_hubs_with_drug_hits.tsv")
 drug_map_path   <- file.path(drug_dir, "CMap_queryl1k_cross_species_BROAD_drug_top50_with_PPI_mapping.tsv")
 
-if (!file.exists(nodes_path)) {
-  stop("PPI nodes table not found at:\n  ", nodes_path)
-}
-if (!file.exists(hubs_drug_path)) {
-  stop("Hub+drug table not found at:\n  ", hubs_drug_path)
-}
-if (!file.exists(drug_map_path)) {
-  stop("Drug–PPI mapping table not found at:\n  ", drug_map_path)
+for (p in c(nodes_path, hubs_drug_path, drug_map_path)) {
+  if (!file.exists(p)) {
+    stop("Required file not found at:\n  ", p)
+  }
 }
 
 ## --------------------------------------------------------------------
-## 2. Fig. 4A – PPI centrality landscape
+## 2. helpers
+## --------------------------------------------------------------------
+normalize_hub_type <- function(x) {
+  x <- as.character(x)
+  dplyr::case_when(
+    x %in% c("hub_bottleneck", "hub-bottleneck", "hub bottleneck") ~ "hub_bottleneck",
+    x %in% c("bottleneck") ~ "bottleneck",
+    x %in% c("hub") ~ "hub",
+    TRUE ~ "non_hub"
+  )
+}
+
+## --------------------------------------------------------------------
+## 3. Fig. 3A – PPI centrality landscape
 ## --------------------------------------------------------------------
 message("Reading PPI node and hub+drug tables ...")
 
@@ -76,11 +92,12 @@ hubs_drug <- readr::read_tsv(hubs_drug_path, show_col_types = FALSE)
 needed_nodes <- c("gene", "degree", "betweenness")
 missing_nodes <- setdiff(needed_nodes, names(nodes))
 if (length(missing_nodes) > 0) {
-  stop("PPI nodes table is missing required columns: ",
-       paste(missing_nodes, collapse = ", "))
+  stop(
+    "PPI nodes table is missing required columns: ",
+    paste(missing_nodes, collapse = ", ")
+  )
 }
 
-# اگر ستون‌های اضافی نباشند، مقداردهی ایمن
 if (!"hub_type" %in% names(nodes)) {
   nodes$hub_type <- "non_hub"
 }
@@ -88,165 +105,205 @@ if (!"logFC_human" %in% names(nodes)) {
   nodes$logFC_human <- NA_real_
 }
 
-# hub_type را factor استاندارد می‌کنیم
 nodes <- nodes %>%
   mutate(
-    hub_type = case_when(
-      hub_type %in% c("hub_bottleneck", "hub-bottleneck") ~ "hub_bottleneck",
-      hub_type %in% c("bottleneck")                      ~ "bottleneck",
-      hub_type %in% c("hub")                             ~ "hub",
-      TRUE                                               ~ "non_hub"
-    ),
+    gene = as.character(gene),
+    degree = as.numeric(degree),
+    betweenness = as.numeric(betweenness),
+    hub_type = normalize_hub_type(hub_type),
     hub_type = factor(
       hub_type,
       levels = c("non_hub", "hub", "bottleneck", "hub_bottleneck")
     )
   )
 
-# join با جدول hub+drug برای آوردن n_drugs و لیست داروها
-nodes2 <- nodes %>%
-  left_join(
-    hubs_drug %>%
-      select(gene, n_drugs, drugs),
-    by = "gene"
-  ) %>%
-  mutate(
-    n_drugs = replace_na(n_drugs, 0L),
-    has_drug = if_else(n_drugs > 0, "Drug-targeted", "No drug hit"),
-    has_drug = factor(has_drug, levels = c("No drug hit", "Drug-targeted"))
-  )
+hubs_drug2 <- hubs_drug %>%
+  mutate(gene = as.character(gene)) %>%
+  select(any_of(c("gene", "n_drugs", "drugs")))
 
-# برای readability، فقط نودهای با degree بالا یا hub/bottleneck را نگه می‌داریم
-deg_q90 <- quantile(nodes2$degree, 0.90, na.rm = TRUE)
+nodes2 <- nodes %>%
+  left_join(hubs_drug2, by = "gene") %>%
+  mutate(
+    n_drugs = tidyr::replace_na(as.integer(n_drugs), 0L),
+    drugs   = tidyr::replace_na(drugs, ""),
+    has_drug = n_drugs > 0
+  )
+## export full central-node list for Supplementary Table S1
+central_nodes_tbl <- nodes2 %>%
+  filter(hub_type %in% c("hub_bottleneck", "bottleneck")) %>%
+  mutate(
+    node_class = dplyr::case_when(
+      hub_type == "hub_bottleneck" ~ "Hub–bottleneck",
+      hub_type == "bottleneck" ~ "Bottleneck",
+      TRUE ~ "Other"
+    ),
+    labelled_in_Fig3A = gene %in% c(
+      nodes2 %>% filter(hub_type == "hub_bottleneck") %>% pull(gene),
+      "PARP1"
+    )
+  ) %>%
+  arrange(
+    factor(node_class, levels = c("Hub–bottleneck", "Bottleneck")),
+    desc(betweenness),
+    desc(degree),
+    gene
+  ) %>%
+  select(gene, degree, betweenness, node_class, n_drugs, drugs, labelled_in_Fig3A)
+
+central_nodes_out <- file.path(net_dir, "PPI_central_nodes_for_STable_S1.tsv")
+readr::write_tsv(central_nodes_tbl, central_nodes_out)
+
+message("Saved central-node table for Supplementary Table S1 to:")
+message("  ", central_nodes_out)
+
+## for readability: retain degree >= 90th percentile OR any central node
+deg_q90 <- stats::quantile(nodes2$degree, 0.90, na.rm = TRUE)
 
 nodes_plot <- nodes2 %>%
   filter(degree >= deg_q90 | hub_type != "non_hub")
 
-message("  - Nodes used for Fig. 4A: ", nrow(nodes_plot),
-        " (degree >= 90th percentile or hub/bottleneck)")
-
-# نودهایی که دارو می‌زنند (TOP2A, PARP1) را جدا می‌کنیم
-nodes_drug <- nodes_plot %>%
-  filter(has_drug == "Drug-targeted")
-
-# رنگ‌ها برای hub_type
-hub_cols <- c(
-  "non_hub"       = "grey80",
-  "hub"           = "#3182bd",
-  "bottleneck"    = "#e6550d",
-  "hub_bottleneck"= "#9e0168"
+message(
+  "  - Nodes used for Fig. 3A: ", nrow(nodes_plot),
+  " (degree >= 90th percentile or hub/bottleneck)"
 )
 
-p4A <- ggplot(nodes_plot, aes(x = degree, y = betweenness)) +
-  # پس‌زمینه: همه‌ی این ساب‌ست
-  geom_point(aes(color = hub_type),
-             size = 2.2,
-             alpha = 0.9) +
+## nodes with direct drug hits: black ring
+nodes_drug <- nodes_plot %>%
+  filter(has_drug)
+
+## labels:
+##  - all hub–bottlenecks
+##  - PARP1 additionally, even though it is bottleneck not hub–bottleneck
+label_df <- nodes_plot %>%
+  filter(hub_type == "hub_bottleneck" | gene == "PARP1") %>%
+  distinct(gene, .keep_all = TRUE) %>%
+  arrange(desc(betweenness), desc(degree), gene)
+
+message("Genes labelled in Fig. 3A:")
+cat("  ", paste(label_df$gene, collapse = ", "), "\n")
+
+hub_cols <- c(
+  "non_hub"        = "grey80",
+  "hub"            = "#3182bd",
+  "bottleneck"     = "#e6550d",
+  "hub_bottleneck" = "#9e0168"
+)
+
+p3A <- ggplot(nodes_plot, aes(x = degree, y = betweenness)) +
+  geom_point(
+    aes(color = hub_type),
+    size = 2.2,
+    alpha = 0.9
+  ) +
   scale_color_manual(
     name   = "Node class",
     values = hub_cols,
     breaks = c("hub_bottleneck", "hub", "bottleneck", "non_hub"),
     labels = c("Hub–bottleneck", "Hub", "Bottleneck", "Other")
   ) +
-  # حلقه‌ی ضخیم دور نودهایی که دارو می‌زنند
+  ## black ring around drug-targeted nodes
   geom_point(
     data = nodes_drug,
     aes(x = degree, y = betweenness),
-    shape = 21,
-    size  = 4.5,
+    inherit.aes = FALSE,
+    shape  = 21,
+    size   = 4.5,
     stroke = 1.2,
     colour = "black",
     fill   = NA
   ) +
-  # برچسب برای TOP2A و PARP1 (اگر حضور دارند)
+  ## labels for all hub–bottlenecks + PARP1
   ggrepel::geom_text_repel(
-    data = nodes_plot %>%
-      filter(gene %in% c("TOP2A", "PARP1")),
+    data = label_df,
     aes(label = gene),
     size = 3.3,
     fontface = "bold",
-    box.padding = 0.25,
+    box.padding = 0.28,
     point.padding = 0.25,
-    max.overlaps = 20,
-    min.segment.length = 0
+    max.overlaps = Inf,
+    min.segment.length = 0,
+    seed = 12345,
+    segment.color = "grey40"
   ) +
   labs(
     x = "Degree centrality",
-    y = "Betweenness centrality",
-    title = "PPI centrality landscape of the cross-species BROAD module"
+    y = "Betweenness centrality"
   ) +
   theme_bw(base_size = 12) +
   theme(
     panel.grid.minor = element_blank(),
     legend.position  = "right",
     legend.title     = element_text(size = 10),
-    legend.text      = element_text(size = 9),
-    plot.title       = element_text(hjust = 0, face = "bold", size = 13)
+    legend.text      = element_text(size = 9)
   )
 
-out4A_png <- file.path(fig_dir, "Fig4A_PPI_centrality_BROAD.png")
-out4A_pdf <- file.path(fig_dir, "Fig4A_PPI_centrality_BROAD.pdf")
+out3A_png <- file.path(fig_dir, "Fig3A_PPI_centrality_BROAD.png")
+out3A_pdf <- file.path(fig_dir, "Fig3A_PPI_centrality_BROAD.pdf")
 
-ggsave(out4A_png, p4A, width = 7.5, height = 5.5, dpi = 400)
-ggsave(out4A_pdf, p4A, width = 7.5, height = 5.5)
+ggsave(out3A_png, p3A, width = 7.5, height = 5.5, dpi = 400)
+ggsave(out3A_pdf, p3A, width = 7.5, height = 5.5)
 
-message("Saved Fig. 4A centrality plot to:")
-message("  ", out4A_png)
-message("  ", out4A_pdf)
+message("Saved Fig. 3A centrality plot to:")
+message("  ", out3A_png)
+message("  ", out3A_pdf)
 
 ## --------------------------------------------------------------------
-## 3. Fig. 4B – CMap drug landscape with PPI mapping
+## 4. Fig. 3C – CMap drug landscape with PPI mapping
 ## --------------------------------------------------------------------
 message("Reading CMap drug–PPI mapping table ...")
 
 drug_map <- readr::read_tsv(drug_map_path, show_col_types = FALSE)
 
-needed_drug <- c("pert_name", "drug_name", "min_score", "MOA_category",
-                 "n_targets_in_module", "n_targets_in_hubs",
-                 "n_targets_in_hub_bottleneck",
-                 "genes_in_module", "genes_in_hubs", "genes_in_hub_bottleneck")
+needed_drug <- c(
+  "pert_name", "drug_name", "min_score", "MOA_category",
+  "n_targets_in_module", "n_targets_in_hubs",
+  "n_targets_in_hub_bottleneck",
+  "genes_in_module", "genes_in_hubs", "genes_in_hub_bottleneck"
+)
 missing_drug <- setdiff(needed_drug, names(drug_map))
 if (length(missing_drug) > 0) {
-  stop("Drug mapping table is missing required columns: ",
-       paste(missing_drug, collapse = ", "))
+  stop(
+    "Drug mapping table is missing required columns: ",
+    paste(missing_drug, collapse = ", ")
+  )
 }
 
 drug_df <- drug_map %>%
-  filter(!is.na(n_targets_in_module),
-         n_targets_in_module > 0) %>%
+  mutate(
+    genes_in_hubs = tidyr::replace_na(genes_in_hubs, ""),
+    genes_in_hub_bottleneck = tidyr::replace_na(genes_in_hub_bottleneck, ""),
+    drug_name_plot = dplyr::if_else(
+      is.na(drug_name) | drug_name == "",
+      pert_name,
+      drug_name
+    )
+  ) %>%
+  filter(!is.na(n_targets_in_module), n_targets_in_module > 0) %>%
   mutate(
     neg_conn = -min_score,
-    # core hits: TOP2A و/یا PARP1
-    genes_in_hubs          = genes_in_hubs %||% "",
-    genes_in_hub_bottleneck = genes_in_hub_bottleneck %||% "",
     hit_TOP2A = str_detect(genes_in_hubs, "TOP2A") |
       str_detect(genes_in_hub_bottleneck, "TOP2A"),
     hit_PARP1 = str_detect(genes_in_hubs, "PARP1") |
       str_detect(genes_in_hub_bottleneck, "PARP1"),
     core_hit = case_when(
       hit_TOP2A & hit_PARP1 ~ "TOP2A + PARP1",
-      hit_TOP2A            ~ "TOP2A",
-      hit_PARP1            ~ "PARP1",
-      TRUE                 ~ "None"
+      hit_TOP2A             ~ "TOP2A",
+      hit_PARP1             ~ "PARP1",
+      TRUE                  ~ "None"
     ),
-    core_hit = factor(core_hit,
-                      levels = c("None", "TOP2A", "PARP1", "TOP2A + PARP1")),
-    drug_name_plot = if_else(
-      is.na(drug_name) | drug_name == "",
-      pert_name,
-      drug_name
+    core_hit = factor(
+      core_hit,
+      levels = c("None", "TOP2A", "PARP1", "TOP2A + PARP1")
     )
   ) %>%
   arrange(neg_conn) %>%
   mutate(
-    drug_name_plot = fct_reorder(drug_name_plot, neg_conn)
+    drug_name_plot = forcats::fct_reorder(drug_name_plot, neg_conn)
   )
 
 message("  - Drugs with at least one target in module: ", nrow(drug_df))
 
-# شکل لالی‌پاپ افقی
-p4B <- ggplot(drug_df,
-              aes(x = neg_conn, y = drug_name_plot)) +
+p3C <- ggplot(drug_df, aes(x = neg_conn, y = drug_name_plot)) +
   geom_segment(
     aes(x = 0, xend = neg_conn, y = drug_name_plot, yend = drug_name_plot),
     colour = "grey85",
@@ -266,7 +323,7 @@ p4B <- ggplot(drug_df,
     range = c(2.5, 7)
   ) +
   scale_shape_manual(
-    name  = "Core hub overlap",
+    name   = "Core hub overlap",
     values = c(
       "None"          = 21,
       "TOP2A"         = 23,
@@ -275,12 +332,14 @@ p4B <- ggplot(drug_df,
     )
   ) +
   guides(
-    fill = guide_legend(title = "MOA category", override.aes = list(shape = 21, size = 4))
+    fill = guide_legend(
+      title = "MOA category",
+      override.aes = list(shape = 21, size = 4)
+    )
   ) +
   labs(
     x = expression("- connectivity strength (min score)"),
-    y = NULL,
-    title = "CMap drug landscape with cross-species module and PPI overlap"
+    y = NULL
   ) +
   theme_bw(base_size = 11) +
   theme(
@@ -290,18 +349,17 @@ p4B <- ggplot(drug_df,
     legend.position  = "right",
     legend.title     = element_text(size = 9),
     legend.text      = element_text(size = 8),
-    plot.title       = element_text(hjust = 0, face = "bold", size = 13),
     plot.margin      = margin(t = 8, r = 8, b = 8, l = 8)
   )
 
-out4B_png <- file.path(fig_dir, "Fig4B_CMap_drug_landscape_PPI_overlap.png")
-out4B_pdf <- file.path(fig_dir, "Fig4B_CMap_drug_landscape_PPI_overlap.pdf")
+out3C_png <- file.path(fig_dir, "Fig3C_CMap_drug_landscape_PPI_overlap.png")
+out3C_pdf <- file.path(fig_dir, "Fig3C_CMap_drug_landscape_PPI_overlap.pdf")
 
-ggsave(out4B_png, p4B, width = 7.8, height = 6.2, dpi = 400)
-ggsave(out4B_pdf, p4B, width = 7.8, height = 6.2)
+ggsave(out3C_png, p3C, width = 7.8, height = 6.2, dpi = 400)
+ggsave(out3C_pdf, p3C, width = 7.8, height = 6.2)
 
-message("Saved Fig. 4B drug landscape plot to:")
-message("  ", out4B_png)
-message("  ", out4B_pdf)
+message("Saved Fig. 3C drug landscape plot to:")
+message("  ", out3C_png)
+message("  ", out3C_pdf)
 
 message("=== Phase 8 (Figures) completed successfully. ===")
