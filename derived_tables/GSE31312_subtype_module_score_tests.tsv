@@ -1,0 +1,2 @@
+score_column	subtype_column	n_total	n_GCB	n_ABC	ttest_p	wilcox_p	mean_GCB	mean_ABC
+score_net_z	gep	426	227	199	0.7784768867684502	0.9811219118829934	-0.0099097553962933	-0.0018826045068980916
